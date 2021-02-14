@@ -1,0 +1,22 @@
+## Test area is used to monitor the changes of repo in real time
+## whenever there is a change, the bot will analysis the modified file structure, 
+## check if there is compile error, translate the text when necessary,
+## and update the workarea to the latest if nothing wrong
+gitlab:
+  home: http://gitlab.example.com
+
+testarea:
+  relpath: testarea
+  git_remote: git@gitlab.example.com:pku/hepwiki.git
+
+## Work area where the gitbook is served on
+workarea:
+  relpath: ../hepwiki
+  git_remote: git@gitlab.example.com:pku/hepwiki.git
+
+## Git configs on the bot. ssh_key is necessary and it MUST not contain the passphrase
+bot:
+  ssh_key: ~/.ssh/wikibot_ed25519
+  author: wikibot
+  email: example@example.com
+  commit_prefix: '[Bot] '
