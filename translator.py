@@ -73,7 +73,7 @@ class DeepLTranslator(DummyTranslator):
             _logger.warning(f'DeepL translation timeout... Error: {e}')
 
         ## Quit the browser before leaving
-        _logger.debug(f'Translations done: {text_target}')
+        _logger.debug(f'Translations done (raw): {text_target}')
         _logger.debug(f'Quitting DeepL...')
         driver.quit()
 
@@ -103,8 +103,11 @@ def fix_broken_mkdown(text):
     import re
     ## Fix broken ![] syntax
     text = re.sub('([\n\s]+[!！]?)[ ]*[\[【](.*)[\]】][ ]*[\(（](.*)[\)）]', '\g<1>[\g<2>](\g<3>)', text)
+    text = re.sub('[\[【](.*)[\]】][ ]*[\(（](.*)[\)）]', '[\g<1>](\g<2>)', text)
     ## Fix web link containing ../
     text = re.sub('\.\.\.[ ]?\/', '../', text)
+    ## Fix broken <!-- syntax
+    text = re.sub('\<\![ ]+\-\-', '<!--', text)
     ## Fix broken link
     for link in re.findall(r'\[.+\]\((.+)\)', text):
         if ' ' in link:
