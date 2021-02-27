@@ -87,7 +87,7 @@ class TestMonitor(ExternalProcess):
 
         def notify_error(text):
             _logger.error(text)
-            send_mail(subject='Wikibot detect error: '+text, text=text, args=args)
+            send_mail(subject=args['bot']['commit_prefix']+'Wikibot detect error: '+text, text=text, args=args)
         
         def translate_from_to(_translator, lang, from_path, to_path):
             with open(from_path) as f:
@@ -150,7 +150,7 @@ class TestMonitor(ExternalProcess):
                 mail_templ = 'Dear {author},\n\nThe commit {cid}\nis successfully pushed to origin/master.\n'
                 mail_templ += 'However it cannot be built successfully. See the log below:\n\n{gb_out}\n\nCheers,\nBot\n'
                 send_mail(
-                    subject='Commit {cid8} merged to hepwiki. Problem detected'.format(cid8=remote_last_cid[:8]),
+                    subject=args['bot']['commit_prefix']+'Commit {cid8} merged to hepwiki. Problem detected'.format(cid8=remote_last_cid[:8]),
                     text=mail_templ.format(
                         author=commit_author[0],
                         cid=os.path.join(args['gitlab']['home'], args['testarea']['git_remote'].split(':')[-1][:-4], '-/commit', remote_last_cid),
@@ -189,7 +189,7 @@ class TestMonitor(ExternalProcess):
                         mail_templ += 'It seems you have modified both SUMMARY.md in zh-hans/ and en/, while they are not consistent after revision.'
                         mail_templ += 'Please check the syntax of two SUMMARY.md files below (especially check the spacing) and make another commit:\n\n{weblink}\n\nCheers,\nBot\n'
                         send_mail(
-                            subject='Commit {cid8} merged to hepwiki. Problem detected'.format(cid8=remote_last_cid[:8]),
+                            subject=args['bot']['commit_prefix']+'Commit {cid8} merged to hepwiki. Problem detected'.format(cid8=remote_last_cid[:8]),
                             text=mail_templ.format(
                                 author=commit_author[0],
                                 cid=os.path.join(args['gitlab']['home'], args['testarea']['git_remote'].split(':')[-1][:-4], '-/commit', remote_last_cid),
@@ -247,14 +247,15 @@ class TestMonitor(ExternalProcess):
                         if os.path.exists(absfpath_dual):
                             notify_error(f"In commit {remote_last_cid}: {dual(fpath)['name']} should not exist, since {fpath} is just created")
                         if fpath.endswith('.md'): # need translation
-                            _logger.info(f"In commit {remote_last_cid}: {dual(fpath)['name']} is auto-translated")
-                            translate_from_to(
-                                trans,
-                                lang=dual(fpath)['trans'],
-                                from_path=absfpath,
-                                to_path=absfpath_dual,
-                            )
-                            auto_trans.append(dual(fpath)['name'])
+                            if os.path.exists(dual(fpath)['name']) and get_file_last_commit_author(path=path, fpath=dual(fpath)['name'])[0] == args['bot']['author']:
+                                _logger.info(f"In commit {remote_last_cid}: {dual(fpath)['name']} is auto-translated")
+                                translate_from_to(
+                                    trans,
+                                    lang=dual(fpath)['trans'],
+                                    from_path=absfpath,
+                                    to_path=absfpath_dual,
+                                )
+                                auto_trans.append(dual(fpath)['name'])
                         else: # direct copy is fine
                             shutil.copy(absfpath, absfpath_dual)
 
@@ -338,7 +339,7 @@ class TestMonitor(ExternalProcess):
                 
                 mail_templ += 'Cheers,\nBot\n'
                 send_mail(
-                    subject='Commit {cid8} merged to hepwiki. Built successfully'.format(cid8=remote_last_cid[:8]),
+                    subject=args['bot']['commit_prefix']+'Commit {cid8} merged to hepwiki. Built successfully'.format(cid8=remote_last_cid[:8]),
                     text=mail_templ.format(
                         author=commit_author[0],
                         cid=os.path.join(args['gitlab']['home'], args['testarea']['git_remote'].split(':')[-1][:-4], '-/commit', remote_last_cid),
