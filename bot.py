@@ -93,7 +93,6 @@ class TestMonitor(ExternalProcess):
             with open(from_path) as f:
                 text = f.read()
             text = _translator.launch(text, target_lang=lang[1], source_lang=lang[0])
-            text = _translator.post(text)
             with open(to_path, 'w') as fw:
                 fw.write(text)
 
@@ -110,6 +109,8 @@ class TestMonitor(ExternalProcess):
         ## Assert that current repo can be built successfully, and SUMMARY.md has consistent format
         if gitbook_built_success(path)[0] and sp.check_consistency(path):
             last_success_cid = last_cid
+            ## Also pull the lastest repo to workarea
+            git_pull(path=args['workarea']['relpath'], args=args)
         else:
             _logger.warning('Problem detected with current remote repo! It is either a build failure, or inconsistency in SUMMARY.md. We will read the last success commit id')
             with open('.commit_success') as f:
@@ -120,7 +121,7 @@ class TestMonitor(ExternalProcess):
             fw.write(last_success_cid)
 
         ## Init translator
-        trans = Translator(selenium_configs={'http_proxy':'127.0.0.1:8090', 'headless':True})
+        trans = Translator(selenium_configs={'http_proxy':'127.0.0.1:8090', 'headless':True}, do_post=True, support_mkdown=True)
 
         ## Start test monitoring
         while True:
@@ -156,7 +157,7 @@ class TestMonitor(ExternalProcess):
                         cid=os.path.join(args['gitlab']['home'], args['testarea']['git_remote'].split(':')[-1][:-4], '-/commit', remote_last_cid),
                         gb_out=gb_out,
                     ),
-                    args=args, receiver='{} <{}>'.format(*commit_author), cc_admin=True,
+                    args=args, receiver='{} <{}>'.format(*commit_author), bcc_admin=True,
                 )
             else: # success! Do bot's job
                 ## Get the diff tree list
@@ -198,7 +199,7 @@ class TestMonitor(ExternalProcess):
                                     os.path.join(args['gitlab']['home'], args['testarea']['git_remote'].split(':')[-1][:-4], '-/raw', remote_last_cid, 'en/SUMMARY.md'),
                                 ]),
                             ),
-                            args=args, receiver='{} <{}>'.format(*commit_author), cc_admin=True,
+                            args=args, receiver='{} <{}>'.format(*commit_author), bcc_admin=True,
                         )
                         continue # directly go to next iteration and wait for future fix
                 elif sum(is_modif_sum_lang) == 1:
@@ -229,6 +230,8 @@ class TestMonitor(ExternalProcess):
                 ## 2. Then check line by line and handles all detected file changes
                 ## ================================================================================
                 for line in diff_tree:
+                    if not (line[1].startswith('zh-hans/') or line[1].startswith('en/')): # files not related to lingual
+                        continue
                     if not (line[-1].startswith('zh-hans/') or line[-1].startswith('en/')): # files not related to lingual
                         continue
                     if line[-1].endswith('/SUMMARY.md'): # they are handled already
@@ -247,7 +250,7 @@ class TestMonitor(ExternalProcess):
                         if os.path.exists(absfpath_dual):
                             notify_error(f"In commit {remote_last_cid}: {dual(fpath)['name']} should not exist, since {fpath} is just created")
                         if fpath.endswith('.md'): # need translation
-                            if os.path.exists(dual(fpath)['name']) and get_file_last_commit_author(path=path, fpath=dual(fpath)['name'])[0] == args['bot']['author']:
+                            if not os.path.exists(dual(fpath)['name']) or (os.path.exists(dual(fpath)['name']) and get_file_last_commit_author(path=path, fpath=dual(fpath)['name'])[0] == args['bot']['author']):
                                 _logger.info(f"In commit {remote_last_cid}: {dual(fpath)['name']} is auto-translated")
                                 translate_from_to(
                                     trans,
@@ -256,6 +259,8 @@ class TestMonitor(ExternalProcess):
                                     to_path=absfpath_dual,
                                 )
                                 auto_trans.append(dual(fpath)['name'])
+                            else:
+                                need_manual_trans.append(dual(fpath)['name'])
                         else: # direct copy is fine
                             shutil.copy(absfpath, absfpath_dual)
 
@@ -322,16 +327,16 @@ class TestMonitor(ExternalProcess):
                 new_diff_tree = get_diff_tree(path=path, commit_id=f'{remote_last_cid}..{last_success_cid}')
 
                 mail_templ = 'Dear {author},\n\nThe commit {cid}\nis successfully pushed to origin/master.\n'
-                mail_templ += 'The repo can be successfully built. Listed below is the file changes w.r.t. lastest successful build:\n\n'
+                mail_templ += 'The repo can be successfully built. Listed below are the file changes w.r.t. lastest successful build:\n\n'
                 mail_templ += '\n'.join(['\t'.join(line) for line in diff_tree])+'\n\n'
                 if len(auto_trans) == 0:
-                    mail_templ += 'No files are auto translated translation.\n\n'
+                    mail_templ += 'No files are auto-translated.\n\n'
                 else:
-                    mail_templ += '📙 Following files are auto-translated:\n\n{auto_trans_text}\n\n'
+                    mail_templ += '📙 The following file(s) are auto-translated:\n\n{auto_trans_text}\n\n'
                 if len(need_manual_trans) == 0:
                     mail_templ += 'No files need manual translation.\n\n'
                 else:
-                    mail_templ += '⚠️ Following files may need manual translation:\n\n{need_manual_trans_text}\n\n'
+                    mail_templ += '⚠️ The following file(s) may need manual translation:\n\n{need_manual_trans_text}\n\n'
                 if need_push:
                     mail_templ += 'I have made another submit dealing with the translation. The latest commit is at:\n{bot_cid}\n\n'
                     mail_templ += 'Listed below is the file changes w.r.t. your commit:\n\n'
@@ -347,7 +352,7 @@ class TestMonitor(ExternalProcess):
                         need_manual_trans_text='\n'.join(need_manual_trans),
                         bot_cid=os.path.join(args['gitlab']['home'], args['testarea']['git_remote'].split(':')[-1][:-4], '-/commit', last_success_cid),
                     ),
-                    args=args, receiver='{} <{}>'.format(*commit_author), cc_admin=True,
+                    args=args, receiver='{} <{}>'.format(*commit_author), bcc_admin=True,
                 )
 
                 ## Finally, do git pull in workarea. The remote can be sync-ed to workarea now

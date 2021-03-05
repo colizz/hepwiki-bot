@@ -33,16 +33,16 @@ class ExternalProcess(object):
     @classmethod
     def monitor_all(cls):
         """Monitor all external processes held by the class. If any process halts, notify the admin"""
+        is_halt = {}
         while True:
             time.sleep(10)
-            n_halt = 0
-            for obj in cls._instance:
+            for iobj, obj in enumerate(cls._instance):
                 obj.p.join(timeout=0)
-                if not obj.p.is_alive():
-                    n_halt += 1
+                if not obj.p.is_alive() and iobj not in is_halt:
+                    is_halt[iobj] = True
                     subject = f"Wiki error: process '{obj.name}' (PID: {obj.pid.value}) is halted"
                     _logger.error(subject+': '+obj.errormsg.value)
-                    send_mail(subject=subject, text=obj.errormsg, args=obj.args)
-            if n_halt == len(cls._instance):
+                    send_mail(subject=subject, text=obj.errormsg.value, args=obj.args)
+            if len(is_halt) == len(cls._instance):
                 _logger.error('End of class: all processes are halted')
                 break

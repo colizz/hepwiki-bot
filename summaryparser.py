@@ -41,6 +41,7 @@ class SummaryParser(object):
         _logger.debug(f'Read original patch: {patch}')
         patch_newfpath_dic = {title:fpath for title, fpath in re.findall('\+[ ]*\*[ ]*\[(.+)\]\((.+)\)', patch)}
         patch_oldfpath_dic = {title:fpath for title, fpath in re.findall('\-[ ]*\*[ ]*\[(.+)\]\((.+)\)', patch)}
+        patch_oldfpath_dic_nospace = {title.replace(' ',''):fpath for title, fpath in re.findall('\-[ ]*\*[ ]*\[(.+)\]\((.+)\)', patch)}
         patch_orig = patch
         lines = patch.split('\n')
         n_trans, trans_list = 0, []
@@ -53,9 +54,9 @@ class SummaryParser(object):
                     ## The path must exists in the unmodified file. Replace the title using the file->title dic from the target lang
                     lines[i] = line.replace(title, target_title_dic[fpath])
                 else: # marker=='+'
-                    if title in patch_newfpath_dic and title in patch_oldfpath_dic:
+                    if title in patch_newfpath_dic and title.replace(' ','') in patch_oldfpath_dic_nospace:
                         ## Title is unchanged but the file path changes (file is moved) -> restore the old title then
-                        lines[i] = line.replace(title, target_title_dic[patch_oldfpath_dic[title]])
+                        lines[i] = line.replace(title, target_title_dic[patch_oldfpath_dic_nospace[title.replace(' ','')]])
                     else:
                         trans_list.append(title)
                         lines[i] = line.replace(title, f"$TRANS{str(n_trans).zfill(5)}")
